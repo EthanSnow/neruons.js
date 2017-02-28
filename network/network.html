@@ -1,0 +1,544 @@
+<head>
+  <meta charset="UTF-8">
+  <script src="Chart.js"></script>
+  <style>
+    .neuron{
+      background: #4CBCFF;
+      width: 15%;
+      height: 20%;
+      margin: 2%;
+      text-align: center;
+      display: inline-block;
+    }
+    .sub_div{
+      width: 5%;
+      height: 1em;
+      background: green;
+    }
+    .sub_divHighLighted{
+      width: 100%;
+      height: 1em;
+      background: red;
+    }
+    .sub_2_div{
+      width: 5%;
+      height: 1em;
+      background: green;
+    }
+    .sub_2_divHighLighted{
+      width: 100%;
+      height: 1em;
+      background: grey;
+    }
+    .networkPanel{
+      background: grey;
+      width: 100%;
+      height: 15%;
+      margin: 2%;
+      text-align: center;
+    }
+    #chartDiv{
+      width:50%;
+    }
+  </style>
+</head>
+<body>
+  <div id="chartDiv">
+    <canvas id="myChart" width="400" height="400"></canvas>
+  </div>
+  <script>
+  /*
+Copyright (C) <year> <copyright holders>
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*/
+    Function.prototype.clone = function() {
+        var that = this;
+        var temp = function temporary() { return that.apply(this, arguments); };
+        for(var key in this) {
+            if (this.hasOwnProperty(key)) {
+                temp[key] = this[key];
+            }
+        }
+        return temp;
+    };
+    //declaration
+    let connection = function(){
+      this.weight
+      this.d_weight = 0
+    }
+    let neuron = function(){
+      let word = "111"
+      this.type
+      this.bias = 0
+      this.d_bias = 0
+      this.outputLatch = {}
+      this.activationValue = 0
+      this.oldOutput = 0
+      this.output = 0
+      this.networkRef
+      this.outputFunction = function(input){ //this is the so-called activation function
+        let value
+        if(input<0) value = 0
+        if(input>=0) value = input
+        return value
+      }
+      this.timeLable = -1
+      this.activationValue_listener = function(){
+
+      }
+      //one connection is recorded in two places
+      this.inputRef = [];
+      this.inputWeight = [];
+      this.outWeight = [];
+
+      this.outputConnection = []
+      this.inputConnection = []
+
+    }
+    neuron.prototype.next = function(obj){
+      let element = obj.output
+      let self = obj.self
+      let i = obj.i
+      if(self.timeLable&&element.timeLable==-1){
+        element.timeLable=self.timeLable+1
+      }
+      let deltaValue = self.getOutputValue()*self.outputConnection[i].weight-self.oldOutput*self.outputConnection[i].weight
+      if(Math.abs(deltaValue)>0.00000001){element.plus_activationValue(deltaValue, 0);element.re_estimate()}
+      //element.plus_activationValue(deltaValue, 0);element.re_estimate()
+    }
+    neuron.prototype.tryAgain1sec = (obj)=>{
+      if(self.outputLatch.value!="close")next(obj)
+      if(self.outputLatch.value=="close")setTimeout(function(obj){
+        tryAgain1sec(obj)
+      }, 1000, obj)
+    }
+    neuron.prototype.plus_activationValue = function(plus, minus){// auto forward propagation
+      if(this.timeLable==-1)this.timeLable = 1;
+      this.oldOutput = this.getOutputValue()
+      this.set_activationValue(plus, minus)
+      let self = this
+      self.outputConnection.map((element, i)=>{
+          let output = element.output
+          if(self.outputLatch.value=="close"){
+            this.tryAgain1sec({output, self, i})
+          }
+          if(self.outputLatch.value!="close"){
+            this.next({output, self, i})
+          }
+      })
+    }
+    neuron.prototype.set_activationValue = function(plus, minus){//name???confusing!!!!
+      this.activationValue -= minus
+      this.activationValue += plus //only plus??
+      if(this.activationValue_listener) this.activationValue_listener();
+      }
+      neuron.prototype.getOutputValue = function(){
+        return this.outputFunction(this.activationValue+this.bias)
+      }
+
+    neuron.prototype.addNewOutputConnection = function(ref){
+      let weight = (Math.random()-0.5)*2
+      let theConnection = new connection
+      theConnection.weight= weight
+      theConnection.input = this
+      theConnection.output = ref
+      this.outputConnection.push(theConnection)
+      ref.inputConnection.push(theConnection)
+      this.networkRef.connections.push(theConnection)
+
+    }
+
+    neuron.prototype.setActivationValue_listener = function(executable) {
+      let self = this.activationValue_listener.clone()
+      let factory = function(){
+        return function(){
+          self();
+          executable();
+        }
+      }
+      this.activationValue_listener = factory();
+    }
+    neuron.prototype.init = function(){ // dependence: ownDiv
+      this.set_activationValue(0,0)
+      this.ownDiv.onclick = ()=>{this.bias++;this.plus_activationValue(1,0);this.plus_activationValue(0,1)}// twice in case function did not work
+    }
+
+    neuron.prototype.setCalmingCell = function(){ // dependence: ownDiv
+      this.outputConnection.map((connection, i)=>{
+        connection.weight = -0.5
+      })
+    }
+    neuron.prototype.setToZero = function(){ // dependence: ownDiv
+      this.bias = 0
+      this.plus_activationValue(0,this.activationValue)
+
+    }
+    neuron.prototype.re_estimate = function(){ // dependence: ownDiv
+      let sum = 0
+      let old
+      this.inputConnection.map((connection, i)=>{
+        sum += connection.weight*connection.input.getOutputValue()
+      })
+      this.activationValue = 0
+      this.plus_activationValue(sum,0)
+    }
+    neuron.prototype.getLoss = function(expectedValue){
+      return Math.abs(expectedValue-this.getOutputValue() )
+    }
+/*
+    let neuronReinforcePlugin = function(neuron){
+
+    }
+    */
+    neuron.learning_rate = 0.1
+    neuron.prototype.backPropagation = function(expectedValue, error){
+
+      //let theError = expectedValue - this.getOutputValue()
+
+      var theError = Number.isFinite(expectedValue)?(expectedValue - this.getOutputValue()):error;
+      this.inputConnection.map((connection, i)=>{
+
+        if( (theError!=error) && !(Number.isFinite(expectedValue) ) ){
+          console.log("wrong");
+        }
+
+        connection.d_weight += theError * connection.input.getOutputValue();
+        // encounter outputFunction
+        let a = 0
+        if(connection.input.getOutputValue()>0){a=theError* connection.weight}// this is just for relu
+
+        connection.input.backPropagation(null, a);
+      })
+      this.d_bias += theError
+      this.re_estimate()
+    }
+
+
+
+
+
+    //--this render is made for neuron specifically
+    let render = function(){
+
+    }
+
+    render.prototype.createDiv = function(neuron){
+      let div = document.createElement("div")
+      div.className = "neuron"
+      div.innerHtml = neuron.activationValue
+      document.body.appendChild(div);
+      neuron.ownDiv = div
+    }
+    render.prototype.updateDiv = function(neuron){
+      let div = neuron.ownDiv
+      div.innerHTML =
+      "<div>"+
+              "activationValue: " + Math.round(neuron.activationValue*100)/100 + //hard coding
+              "<br>"+ "bias: " + neuron.bias+
+              "<br>"+ "output: " + Math.round(neuron.getOutputValue()*100)/100 +
+              "<br>"+ "timeLable: " + neuron.timeLable+
+              "<br>"+ "word: " + neuron.word+
+      "</div>"
+
+      // just create two blank div
+      let sub_div = document.createElement("div")
+      sub_div.className = "sub_div"
+      div.appendChild(sub_div)
+
+      let sub_2_div = document.createElement("div")
+      sub_2_div.className = "sub_2_div"
+      div.appendChild(sub_2_div)
+    }
+    render.prototype.onmouseover = function(a){
+      let neuron = a
+      neuron.outputConnection.map((elem, i)=>{
+        let ownDiv = elem.output.ownDiv
+        let sub_div = ownDiv.childNodes[1] //hard coding
+        sub_div.className = "sub_divHighLighted"
+        sub_div.innerHTML = "outWeight: " + Math.round(neuron.outputConnection[i].weight*100)/100
+      })
+
+      neuron.inputConnection.map((elem, i)=>{
+        let ownDiv = elem.input.ownDiv
+        let sub_2_div = ownDiv.childNodes[2] //hard coding
+        sub_2_div.className = "sub_2_divHighLighted"
+        sub_2_div.innerHTML = "inputWeight: " + Math.round(neuron.inputConnection[i].weight*100)/100
+      })
+
+    }
+    render.prototype.onmouseleave = function(a){
+      let neuron = a
+      neuron.outputConnection.map((elem)=>{
+        let ownDiv = elem.output.ownDiv
+        let sub_div = ownDiv.childNodes[1] //hard coding
+        sub_div.className = "sub_div"
+        sub_div.innerHTML = ""
+
+      })
+
+      neuron.inputConnection.map((elem)=>{
+        let ownDiv = elem.input.ownDiv
+        let sub_2_div = ownDiv.childNodes[2] //hard coding
+        sub_2_div.className = "sub_2_div"
+        sub_2_div.innerHTML = ""
+      })
+
+    }
+    render.prototype.createDiv_networkPanel = function(network){
+      let div = document.createElement("div")
+      div.className = "networkPanel"
+      div.innerHtml = network.timeLatch.value
+      document.body.appendChild(div);
+      network.ownDiv = div
+    }
+    render.prototype.updateDiv_networkPanel = function(network){
+      let div = network.ownDiv
+      div.innerHTML =network.timeLatch.value
+
+    }
+
+
+    // dependence: neuron
+    let network = function(){
+      this.neuronIndex = 0
+      this.neurons = []
+      this.renderGuy = new render
+      this.timeLatch = {value: "open"}
+      this.inputs = []
+      this.outputs = []
+      this.timeLatch_listener = function(){
+
+      }
+      this.connections = []
+      this.learning_rate = 0.01
+    }
+    network.prototype.addNewNeuron_init_render = function(){
+      let temp = new neuron
+        temp.word = "No."+this.neuronIndex
+        temp.networkRef = this
+      this.neuronIndex++;
+      this.renderGuy.createDiv(temp)
+      temp.setActivationValue_listener(()=>{this.renderGuy.updateDiv(temp)})
+      temp.init()
+      temp.ownDiv.onmouseover = ()=>{this.renderGuy.onmouseover(temp)}
+      temp.ownDiv.onmouseleave = ()=>{this.renderGuy.onmouseleave(temp)}
+      temp.outputLatch = this.timeLatch
+      this.neurons.push(temp)
+    }
+    network.prototype.set_OutConnection = function(neuron, outTo){
+      neuron.addNewOutputConnection(outTo)
+    }
+    network.prototype.setTimeLatch_listener = function(executable) {
+      let self = this.timeLatch_listener.clone()
+      let factory = function(){
+        return function(){
+          self();
+          executable();
+        }
+      }
+      this.timeLatch_listener = factory();
+    }
+    network.prototype.set_AlltoZero = function(){
+      this.neurons.map((element)=>{element.setToZero()})
+    }
+    network.prototype.setInputsArray = function(){
+      for (var i = 0; i < arguments.length; i++) {
+        this.inputs.push(this.neurons[arguments[i]])
+      }
+    }
+    network.prototype.setOutputsArray = function(){
+      for (var i = 0; i < arguments.length; i++) {
+        this.outputs.push(this.neurons[arguments[i]])
+      }
+    }
+    network.prototype.doInputs = function(){
+      for (var i = 0; i < arguments.length; i++) {
+        this.inputs[i].bias = arguments[i]
+        this.inputs[i].plus_activationValue(1,0);
+        this.inputs[i].plus_activationValue(0,1);
+      }
+    }
+    network.prototype.doBackward = function(){
+      for (var i = 0; i < arguments.length; i++) {
+        this.outputs[i].backPropagation(arguments[i],null)
+      }
+    }
+
+    network.prototype.getLosses = function(){
+      let loss = 0
+      for (var i = 0; i < arguments.length; i++) {
+        loss += this.outputs[i].getLoss(arguments[i])
+      }
+      return loss
+    }
+    network.prototype.massiveConnection = function(){
+      let theNeuron = this.neurons[arguments[0]]
+      for (var i = 1; i < arguments.length; i++) {
+        let tobeConnection = this.neurons[arguments[i]]
+        network1.set_OutConnection(theNeuron, tobeConnection)
+      }
+    }
+    network.prototype.d_weightUpdate = function() {
+
+      this.connections.map((theConnection)=>{
+        theConnection.weight = theConnection.weight + theConnection.d_weight * this.learning_rate
+        theConnection.d_weight = 0
+      })
+      this.neurons.map((elem)=>{
+        elem.bias += elem.d_bias * this.learning_rate
+        elem.d_bias=0
+      })
+    }
+    //end declation
+
+    //test
+
+
+      // chart
+      var ctx = document.getElementById("myChart");
+      var myChart = new Chart(ctx, {
+          type: 'line',
+          data: {
+              labels: [0],
+              datasets: [{
+                  label: '# of Votes',
+                  data: [0],
+                  borderWidth: 1
+              }]
+          },
+          options: {
+            scales: {
+                xAxes: [{
+                    display: false
+                }],
+                yAxes: [{
+                  ticks: {
+                      max: 2,
+                      min: 0,
+                      stepSize: 0.1
+                  }
+              }]
+            }
+          }
+      });
+      // end chart
+    let lossArray =[]
+    let network1 = new network
+    network1.renderGuy.createDiv_networkPanel(network1)
+    network1.renderGuy.updateDiv_networkPanel(network1)
+    network1.addNewNeuron_init_render()
+    network1.addNewNeuron_init_render()
+    network1.addNewNeuron_init_render()
+    network1.addNewNeuron_init_render()
+    network1.addNewNeuron_init_render()
+
+    network1.addNewNeuron_init_render()
+    network1.addNewNeuron_init_render()
+    network1.addNewNeuron_init_render()
+    network1.addNewNeuron_init_render()
+    network1.addNewNeuron_init_render()
+
+    network1.addNewNeuron_init_render()
+    network1.addNewNeuron_init_render()
+
+    network1.massiveConnection(0,3,4,5)
+    network1.massiveConnection(1,3,4,5)
+    network1.massiveConnection(2,3,4,5)
+
+    network1.massiveConnection(3,6,7,8)
+    network1.massiveConnection(4,6,7,8)
+    network1.massiveConnection(5,6,7,8)
+
+    network1.massiveConnection(6,9,10,11)
+    network1.massiveConnection(7,9,10,11)
+    network1.massiveConnection(8,9,10,11)
+    //network1.neurons[1].setCalmingCell()
+    network1.setInputsArray(0,1,2)
+    network1.setOutputsArray(9,10,11)
+    network1.doInputs(0,1,0)
+    network1.doBackward(1,0,1)
+
+    var lossArray_Interval = []
+    var lossArray_length_Interval = 1500
+    var lossArray_window_Interval = 10
+    var index_Interval = 0
+
+
+    setInterval(()=>{
+      let randomnumber=Math.floor(Math.random()*7)
+
+      let first = Math.floor (randomnumber/4)
+      let second = Math.floor ( (randomnumber-first*4)/2)
+      let third = Math.floor ( randomnumber-first*4-second*2)
+
+      network1.doInputs(first,second,third)
+
+
+
+      if(randomnumber<2){
+        network1.doBackward(0,0,1);
+        lossArray_Interval.push(network1.getLosses(0,0,1))}
+      else if(randomnumber<4){
+        network1.doBackward(0,1,0);
+        lossArray_Interval.push(network1.getLosses(0,1,0))}
+      else if(randomnumber<8){
+        network1.doBackward(1,0,0);
+        lossArray_Interval.push(network1.getLosses(1,0,0))}
+
+
+      network1.d_weightUpdate()
+      //console.log(network1.getLosses(first,second,third));
+
+      if (index_Interval == lossArray_window_Interval){
+        let sum = 0
+        for(let i=0;i<lossArray_window_Interval;i++){
+          sum += lossArray_Interval[i]
+        }
+        sum = sum/lossArray_window_Interval
+        myChart.data.labels.push(sum)
+        myChart.data.datasets[0].data.push(sum)
+        myChart.update()
+        // empty all
+        lossArray_Interval = []
+        index_Interval = 0
+      }
+      index_Interval++;
+    }, 1)
+
+
+
+
+//network1.doBackward(1,0,1);network1.d_weightUpdate()
+
+
+
+
+    //network1.doInputs(1,0,0)
+    //network1.doInputs(1,0,1)
+    //network1.doInputs(0,0,1)
+
+
+    //network1.set_OutConnection(network1.neurons[3], network1.neurons[1])
+    //end test
+
+    //job done: let neuron setter activate the render!!!!!!!!!
+    //job done: how to clone function
+
+    //beautify the div
+
+    //let two neurons be responsive with each other
+      //neuronValue plus one when clicked
+
+    //connect two neurons
+
+    //how to clone function
+
+    //activation function
+
+  </script>
+</body>
