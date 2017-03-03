@@ -88,6 +88,9 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
       this.oldOutput = 0
       this.output = 0
       this.networkRef
+this.timeLag = 0
+this.timeIndex = 0
+this.optputQueue = new Array(10).fill(0)
       this.outputFunction = function(input){ //this is the so-called activation function
         let value
         if(input<0) value = 0
@@ -144,9 +147,13 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
       this.activationValue += plus //only plus??
       if(this.activationValue_listener) this.activationValue_listener();
       }
-      neuron.prototype.getOutputValue = function(){
-        return this.outputFunction(this.activationValue+this.bias)
-      }
+
+
+    neuron.prototype.getOutputValue = function(){
+      this.timeIndex = this.timeIndex%(this.optputQueue.length)
+      this.optputQueue[this.timeIndex] = this.outputFunction(this.activationValue+this.bias)
+      return this.optputQueue[(this.optputQueue.length+this.timeIndex - this.timeLag)%(this.optputQueue.length)]
+    }
 
     neuron.prototype.addNewOutputConnection = function(ref){
       let weight = (Math.random()-0.5)*2
@@ -521,17 +528,19 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 
 
-        if(randomnumber<2){
-          network1.doBackward(0,0,1);
-          lossArray_Interval.push(network1.getLosses(0,0,1))}
-        else if(randomnumber<4){
-          network1.doBackward(0,1,0);
-          lossArray_Interval.push(network1.getLosses(0,1,0))}
-        else if(randomnumber<8){
-          network1.doBackward(1,0,0);
-          lossArray_Interval.push(network1.getLosses(1,0,0))}
+      if(randomnumber<2){
+        network1.doBackward(0,0,1);
+        lossArray_Interval.push(network1.getLosses(0,0,1))}
+      else if(randomnumber<4){
+        network1.doBackward(0,1,0);
+        lossArray_Interval.push(network1.getLosses(0,1,0))}
+      else if(randomnumber<8){
+        network1.doBackward(1,0,0);
+        lossArray_Interval.push(network1.getLosses(1,0,0))}
 
-
+        network1.neurons.map((elem)=>{
+          elem.timeIndex++
+        })
         network1.d_weightUpdate()
         //console.log(network1.getLosses(first,second,third));
 
